@@ -1,0 +1,12 @@
+langgraph
+langchain
+langchain-openai
+yfinance
+pandas
+pandas-ta
+matplotlib
+mplfinance
+requests
+python-dotenv
+xlrd
+tqdm
