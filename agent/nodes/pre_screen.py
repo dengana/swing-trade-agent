@@ -31,39 +31,24 @@ def pre_screen(state: AgentState):
             
             # --- フィルタ条件（プロフェショナル仕様の一次審査） ---
             
-            # 1. 流動性と価格のフィルタ (5日平均出来高 > 100,000株 ＆ 価格 > 100 JPY)
+            # 1. 流動性と価格のフィルタ (5日平均出来高 > 30,000株 ＆ 価格 > 100 JPY)
             avg_vol = df[vol_col].tail(5).mean()
-            if avg_vol < 100000 or recent[close_col] < 100:
-                continue
-                
-            is_oversold_reversal = False
-            is_breakout = False
-            
-            # パターンA: ディープバリュー・リバーサル（売られすぎからの反発初動）
-            # RSIが35以下、かつ価格がボリンジャーバンド下限付近(-2σ)、かつMACDヒストグラムが増加に転じた
-            if recent[rsi_col] < 35 and recent[close_col] <= recent[bbl_col] * 1.02:
-                # 1日前のMACDヒストグラムと比較
-                prev_macdh = df[macdh_col].iloc[-2]
-                if recent[macdh_col] > prev_macdh:
-                    is_oversold_reversal = True
-                    
-            # パターンB: モメンタム・ブレイクアウト（ゴールデンクロス直後 ＆ ボリューム急増）
-            if recent[macd_col] > recent[macds_col]: # MACD > Signal
-                prev_macd = df[macd_col].iloc[-2]
-                prev_macds = df[macds_col].iloc[-2]
-                # 前日は MACD < Signal だった（＝たった今ゴールデンクロスした）
-                if prev_macd <= prev_macds and recent[vol_col] > avg_vol * 1.5:
-                    is_breakout = True
-                    
-            # どちらかのエッジを満たした銘柄のみを通過させる
-            if is_oversold_reversal or is_breakout:
-                screened_data[ticker] = df
+            if avg_vol >= 30000 and recent[close_col] >= 100:
+                # RSI値を使ってソートするために保持
+                screened_data[ticker] = (df, recent[rsi_col])
                 
         except Exception as e:
             continue
             
-    print(f"Pre-screening complete: {len(market_data)} total -> {len(screened_data)} candidates passed.")
+    # RSIの低い順（売られすぎ）にソートして上位20銘柄に絞り込む
+    sorted_candidates = sorted(screened_data.items(), key=lambda x: x[1][1])
+    top_candidates = sorted_candidates[:20]
+    
+    # 元の辞書形式に戻す (ticker: df)
+    final_screened_data = {ticker: data[0] for ticker, data in top_candidates}
+            
+    print(f"Pre-screening complete: {len(market_data)} total -> {len(final_screened_data)} candidates passed.")
     
     # 足切り通過銘柄のみに上書きして次（LLM判定）へ渡す
-    state["market_data"] = screened_data
+    state["market_data"] = final_screened_data
     return state

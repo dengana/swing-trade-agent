@@ -4,11 +4,13 @@ from agent.state import AgentState
 
 def notifier(state: AgentState):
     """
-    判定がSTRONG BUYの銘柄のみ抽出し、LINE Messaging APIでPush通知を送信する
+    判定がBUYの銘柄をスコア順にソートし、上位3銘柄を抽出してLINE Messaging APIでPush通知を送信する
     """
     decisions = state.get("decisions", {})
     
-    strong_buys = {ticker: data for ticker, data in decisions.items() if data.get("decision") == "STRONG BUY"}
+    buys = [(ticker, data) for ticker, data in decisions.items() if data.get("decision") == "BUY"]
+    buys.sort(key=lambda x: x[1].get("score", 0), reverse=True)
+    top_3_buys = buys[:3]
     
     line_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
     line_user_id = os.getenv("LINE_USER_ID")
@@ -17,15 +19,16 @@ def notifier(state: AgentState):
         print("Warning: LINE API keys are not set. Cannot send notification.")
         return state
         
-    if not strong_buys:
-        print("No STRONG BUY signals. Sending 'no signal' notification.")
-        message_text = "✅ 【今週の厳格スキャン完了】\n\n約4,000の上場銘柄を解析しましたが、現在の相場環境において『極めて優位性の高い（勝率の高い）銘柄』はひとつも検出されませんでした（0件）。\n\n無理なエントリーは控え、キャッシュを温存することをお勧めします。休むも相場です☕"
+    if not top_3_buys:
+        print("No BUY signals. Sending 'no signal' notification.")
+        message_text = "✅ 【今週のスキャン完了】\n\n銘柄を解析しましたが、現在の相場環境において推奨できる銘柄はひとつも検出されませんでした。\n\n無理なエントリーは控え、キャッシュを温存することをお勧めします。"
     else:
         # 通知メッセージの構築（該当銘柄がある場合）
-        message_lines = ["🚨 【厳格アルゴ 検知レポート】 🚨", "以下の銘柄で極めて優位性の高いシグナルが点灯しました。\n"]
+        message_lines = ["🚨 【注目銘柄 検知レポート】 🚨", "以下の銘柄で優位性の高いシグナルが点灯しました（上位最大3銘柄）。\n"]
         
-        for ticker, info in strong_buys.items():
-            message_lines.append(f"📈 **{ticker}**")
+        for ticker, info in top_3_buys:
+            score = info.get('score', 0)
+            message_lines.append(f"📈 **{ticker}** (スコア: {score}/100)")
             message_lines.append(f"🎯 利確目標: {info['target_price']}")
             message_lines.append(f"🛡️ 損切り: {info['stop_loss']}")
             message_lines.append(f"📝 理由: {info['reason']}\n")

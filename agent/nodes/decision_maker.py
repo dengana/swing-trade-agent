@@ -5,14 +5,15 @@ from pydantic import BaseModel, Field
 from agent.state import AgentState
 
 class TradeDecision(BaseModel):
-    decision: str = Field(description="Trade decision: only 'STRONG BUY' or 'HOLD'")
-    target_price: str = Field(description="Target profit price (🎯 利確目標価格) if STRONG BUY, else '-'")
-    stop_loss: str = Field(description="Stop loss price (🛡️ 損切り価格) if STRONG BUY, else '-'")
+    decision: str = Field(description="Trade decision: only 'BUY' or 'HOLD'")
+    score: int = Field(description="Confidence score from 0 to 100")
+    target_price: str = Field(description="Target profit price (🎯 利確目標価格) if BUY, else '-'")
+    stop_loss: str = Field(description="Stop loss price (🛡️ 損切り価格) if BUY, else '-'")
     reason: str = Field(description="Brief reason for the decision in Japanese")
 
 def decision_maker(state: AgentState):
     """
-    LLMにテクニカル指標を入力し、厳格なトレード判定を行う
+    LLMにテクニカル指標を入力し、トレード判定を行う
     """
     market_data = state.get("market_data", {})
     decisions = {}
@@ -22,15 +23,14 @@ def decision_maker(state: AgentState):
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     structured_llm = llm.with_structured_output(TradeDecision)
 
-    system_prompt = """あなたは世界トップクラスのクオンツファンドのリードエンジニアであり、冷徹で厳格なトレーダーです。
-提供された直近の価格データとテクニカル指標（RSI, MACD, Bollinger Bands）を分析し、スイングトレード（数日〜数週間の保有）の可否を判定してください。
+    system_prompt = """あなたは経験豊富な株式トレーダーです。
+提供された直近の価格データとテクニカル指標（RSI, MACD, Bollinger Bands）を分析し、スイングトレード（数日〜数週間の保有）の戦略を立案してください。
 
-【超・厳格なリスク管理制約】
-1. テクニカル的に極めて優位性が高く、反発や上昇の公算が非常に強い局面でのみ『STRONG BUY』を出力してください。
-2. 少しでも懸念材料がある場合、トレンドが不明確な場合、またはリスクリワードが見合わない場合は、容赦なく『HOLD』としてください。
-3. ポジションを持たないことも立派なトレードです。「BUY」や「SELL」といった曖昧な評価は一切不要です。『STRONG BUY』か『HOLD』の2択です。
-4. STRONG BUYの場合、具体的な数値を含む「🎯 利確目標価格」と「🛡️ 損切り価格」を必ずPromptから算出または推測して設定してください。
-5. 出力理由(reason)は必ず日本語で、なぜその判断に至ったかを端的なプロの視点で記載してください。
+【トレード判定について】
+1. 相場環境にかかわらず、与えられた銘柄でトレードする場合の最適な『BUY』戦略を必ず立案してください。判定(decision)は常に『BUY』としてください。
+2. トレードにおける優位性・自信度を 0 から 100 の「score」（スコアが高いほど勝率が高いと判断）として出力してください。
+3. 具体的な数値を含む「🎯 利確目標価格」と「🛡️ 損切り価格」を必ず設定してください。
+4. 出力理由(reason)は必ず日本語で、なぜその判断（スコア、利確、損切りの設定）に至ったかを端的に記載してください。
 """
 
     prompt_template = ChatPromptTemplate.from_messages([
@@ -40,7 +40,7 @@ def decision_maker(state: AgentState):
 
     for ticker, df in market_data.items():
         if df.empty:
-            decisions[ticker] = {"decision": "HOLD", "target_price": "-", "stop_loss": "-", "reason": "データ不足"}
+            decisions[ticker] = {"decision": "HOLD", "score": 0, "target_price": "-", "stop_loss": "-", "reason": "データ不足"}
             continue
             
         # Extract recent rows for the LLM
@@ -68,13 +68,14 @@ def decision_maker(state: AgentState):
             result = chain.invoke({"ticker": ticker, "data_summary": data_summary})
             decisions[ticker] = {
                 "decision": result.decision,
+                "score": result.score,
                 "target_price": result.target_price,
                 "stop_loss": result.stop_loss,
                 "reason": result.reason
             }
         except Exception as e:
             print(f"Error analyzing {ticker}: {e}")
-            decisions[ticker] = {"decision": "HOLD", "target_price": "-", "stop_loss": "-", "reason": "分析エラー"}
+            decisions[ticker] = {"decision": "HOLD", "score": 0, "target_price": "-", "stop_loss": "-", "reason": "分析エラー"}
 
     state["decisions"] = decisions
     return state
