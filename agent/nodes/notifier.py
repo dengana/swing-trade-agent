@@ -38,7 +38,8 @@ def notifier(state: AgentState):
             name_display = f" {comp_name}" if comp_name else ""
             
             message_lines.append(f"📈 **{ticker}**{name_display} (スコア: {score}/100)")
-            message_lines.append(f"🚀 エントリー: {info.get('entry_price', '-')}")
+            message_lines.append(f"⏳ 保有期間の目安: {info.get('holding_period', '-')}")
+            message_lines.append(f"🚀 エントリー時の株価: {info.get('entry_price', '-')}")
             message_lines.append(f"🎯 利確目標: {info['target_price']}")
             message_lines.append(f"🛡️ 損切り: {info['stop_loss']}")
             message_lines.append(f"📝 理由: {info['reason']}\n")

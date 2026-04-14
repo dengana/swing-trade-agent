@@ -7,7 +7,8 @@ from agent.state import AgentState
 class TradeDecision(BaseModel):
     decision: str = Field(description="Trade decision: only 'BUY' or 'HOLD'")
     score: int = Field(description="Confidence score from 0 to 100")
-    entry_price: str = Field(description="Recommended entry price (🚀 エントリー価格) if BUY, else '-'")
+    holding_period: str = Field(description="Expected holding period (⏳ 保有期間の目安) (e.g., '3〜5日', '1〜2週間')")
+    entry_price: str = Field(description="Recommended entry price (🚀 エントリー時の株価) if BUY, else '-'")
     target_price: str = Field(description="Target profit price (🎯 利確目標価格) if BUY, else '-'")
     stop_loss: str = Field(description="Stop loss price (🛡️ 損切り価格) if BUY, else '-'")
     reason: str = Field(description="Brief reason for the decision in Japanese")
@@ -30,7 +31,7 @@ def decision_maker(state: AgentState):
 【トレード判定について】
 1. 相場環境にかかわらず、与えられた銘柄でトレードする場合の最適な『BUY』戦略を必ず立案してください。判定(decision)は常に『BUY』としてください。
 2. トレードにおける優位性・自信度を 0 から 100 の「score」（スコアが高いほど勝率が高いと判断）として出力してください。
-3. 具体的な数値を含む「🚀 エントリー価格」「🎯 利確目標価格」「🛡️ 損切り価格」を必ず設定してください。エントリー価格は直近のClose価格やテクニカルな反発ポイントなどを参考に設定してください。
+3. 具体的な数値を含む「🚀 エントリー時の株価」「🎯 利確目標価格」「🛡️ 損切り価格」および「⏳ 保有期間の目安」を必ず設定してください。エントリー時の株価は直近のClose価格やテクニカルな反発ポイントなどを参考に設定してください。
 4. 出力理由(reason)は必ず日本語で、なぜその判断（スコア、利確、損切りの設定）に至ったかを端的に記載してください。
 """
 
@@ -41,7 +42,7 @@ def decision_maker(state: AgentState):
 
     for ticker, df in market_data.items():
         if df.empty:
-            decisions[ticker] = {"decision": "HOLD", "score": 0, "entry_price": "-", "target_price": "-", "stop_loss": "-", "reason": "データ不足"}
+            decisions[ticker] = {"decision": "HOLD", "score": 0, "holding_period": "-", "entry_price": "-", "target_price": "-", "stop_loss": "-", "reason": "データ不足"}
             continue
             
         # Extract recent rows for the LLM
@@ -70,6 +71,7 @@ def decision_maker(state: AgentState):
             decisions[ticker] = {
                 "decision": result.decision,
                 "score": result.score,
+                "holding_period": result.holding_period,
                 "entry_price": result.entry_price,
                 "target_price": result.target_price,
                 "stop_loss": result.stop_loss,
@@ -77,7 +79,7 @@ def decision_maker(state: AgentState):
             }
         except Exception as e:
             print(f"Error analyzing {ticker}: {e}")
-            decisions[ticker] = {"decision": "HOLD", "score": 0, "entry_price": "-", "target_price": "-", "stop_loss": "-", "reason": "分析エラー"}
+            decisions[ticker] = {"decision": "HOLD", "score": 0, "holding_period": "-", "entry_price": "-", "target_price": "-", "stop_loss": "-", "reason": "分析エラー"}
 
     state["decisions"] = decisions
     return state
