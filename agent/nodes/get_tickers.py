@@ -30,16 +30,23 @@ def get_tickers(state: AgentState):
         # 普通株式のみを抽出（ETFなどは一旦除外）するため '市場・商品区分' 等でフィルタも可能ですが
         # 今回は全コードを対象とします。
         raw_codes = df['コード'].astype(str).tolist()
+        raw_names = df['銘柄名'].astype(str).tolist()
         
         tickers = []
-        for code in raw_codes:
+        company_names = {}
+        for code, name in zip(raw_codes, raw_names):
             # 4桁のコードのみを対象（インデックス等を除く）
             if len(code) == 4 and code.isdigit():
-                tickers.append(f"{code}.T")
+                ticker = f"{code}.T"
+                tickers.append(ticker)
+                company_names[ticker] = name
                 
         # 保存
         with open(tickers_file, "w", encoding="utf-8") as f:
             json.dump(tickers, f, indent=4)
+            
+        with open("company_names.json", "w", encoding="utf-8") as f:
+            json.dump(company_names, f, indent=4, ensure_ascii=False)
             
         print(f"Successfully fetched {len(tickers)} Japanese stock tickers.")
         state["tickers"] = tickers

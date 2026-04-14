@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from agent.state import AgentState
 
 def notifier(state: AgentState):
@@ -26,9 +27,18 @@ def notifier(state: AgentState):
         # 通知メッセージの構築（該当銘柄がある場合）
         message_lines = ["🚨 【注目銘柄 検知レポート】 🚨", "以下の銘柄で優位性の高いシグナルが点灯しました（上位最大3銘柄）。\n"]
         
+        company_names = {}
+        if os.path.exists("company_names.json"):
+            with open("company_names.json", "r", encoding="utf-8") as f:
+                company_names = json.load(f)
+        
         for ticker, info in top_3_buys:
             score = info.get('score', 0)
-            message_lines.append(f"📈 **{ticker}** (スコア: {score}/100)")
+            comp_name = company_names.get(ticker, "")
+            name_display = f" {comp_name}" if comp_name else ""
+            
+            message_lines.append(f"📈 **{ticker}**{name_display} (スコア: {score}/100)")
+            message_lines.append(f"🚀 エントリー: {info.get('entry_price', '-')}")
             message_lines.append(f"🎯 利確目標: {info['target_price']}")
             message_lines.append(f"🛡️ 損切り: {info['stop_loss']}")
             message_lines.append(f"📝 理由: {info['reason']}\n")
